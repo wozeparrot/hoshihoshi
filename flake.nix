@@ -46,9 +46,6 @@
               zlib
               libGL
               glib
-
-              nodejs
-              yarn
             ]);
             runScript = "fish";
           }).env;

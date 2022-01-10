@@ -1,4 +1,3 @@
-const { Application } = PIXI;
 const { Live2DModel } = PIXI.live2d;
 
 (async function main() {
@@ -8,30 +7,35 @@ const { Live2DModel } = PIXI.live2d;
         autoStart: true,
         backgroundAlpha: 0,
         backgroundColor: 0x00ff00,
-        resizeTo: window
+        width: 640,
+        height: 480,
     });
 
     // load model
     const model = await Live2DModel.from("https://iseng-domathid.vercel.app/rem/model.json", { autoInteract: false });
     const motion = model.internalModel.motionManager;
     const core = model.internalModel.coreModel;
+    model.anchor.set(0.5, 0.5);
+    model.position.set(app.screen.width / 2, app.screen.height / 1.5);
     model.scale.set(0.4);
     model.interactive = true;
-    model.anchor.set(0.5, 0.5);
-    model.position.set(window.innerWidth * 0.5, window.innerHeight * 0.8);
-    model.on("pointerdown", e => {
-        model.offsetX = e.data.global.x - model.position.x;
-        model.offsetY = e.data.global.y - model.position.y;
+
+    // render to rendertexture and sprite
+    const renderTexture = new PIXI.RenderTexture(new PIXI.BaseRenderTexture(app.screen.width, app.screen.height));
+    const sprite = new PIXI.Sprite(renderTexture);
+    document.querySelector("#live2d").addEventListener("pointerdown", e => {
+        model.offsetX = e.x - model.position.x;
+        model.offsetY = e.y - model.position.y;
         model.dragging = true;
     });
-    model.on("pointerup", e => {
+    document.querySelector("#live2d").addEventListener("pointerup", e => {
         model.dragging = false;
     });
-    model.on("pointermove", e => {
+    document.querySelector("#live2d").addEventListener("pointermove", e => {
         if (model.dragging) {
             model.position.set(
-                e.data.global.x - model.offsetX,
-                e.data.global.y - model.offsetY
+                e.x - model.offsetX,
+                e.y - model.offsetY
             );
         }
     });
@@ -41,9 +45,14 @@ const { Live2DModel } = PIXI.live2d;
             model.scale.x + e.deltaY * -0.0001
         );
     });
-    app.stage.addChild(model);
 
-    // connect to websocket
+    // render every tick
+    app.ticker.add(() => {
+        app.renderer.render(model, renderTexture);
+    });
+    app.stage.addChild(sprite);
+
+    // receive tracking data from websocket
     const ws = new WebSocket("ws://10.11.235.99:6789");
     ws.onmessage = ({ data }) => {
         const result = JSON.parse(data);
@@ -94,13 +103,13 @@ const { Live2DModel } = PIXI.live2d;
                 "PARAM_MOUTH_FROM",
                 result.mouth.x,
             );
-            
+
             core.setParamFloat("PARAM_EYE_L_OPEN", result.eye.left);
             core.setParamFloat("PARAM_EYE_R_OPEN", result.eye.right);
 
             return true;
         };
+
+        // ws.send(app.renderer.plugins.extract.base64(renderTexture));
     };
-
-
 })();

@@ -75,18 +75,26 @@ class ThreadedOutput(Process):
         server = WSServer(host="0.0.0.0", port=6789)
         server.run_forever(threaded=True)
 
+        clients = []
+        def ws_new_client(client, server):
+            clients.append(client)
+        server.set_fn_new_client(ws_new_client)
+        def ws_message(client, server, message):
+            if len(clients) >= 2:
+                for i in range(1, len(clients)):
+                    server.send_message(clients[i], message)
+        server.set_fn_message_received(ws_message)
+
         while not self.killed:
             f = self.q.get()
-
+            if len(clients) > 0:
+                server.send_message(clients[0], json.dumps(f[2]))
+            
             b, jpeg = cv2.imencode(".jpg", f[0])
             if not b:
                 continue
 
-            server.send_message_to_all(json.dumps(f[2]))
-
             sys.stdout.buffer.write(jpeg.tobytes())
-
-            # eprint(time.time() - f[1])
 
 
 class ThreadedProcessing(Process):
@@ -104,11 +112,9 @@ class ThreadedProcessing(Process):
         self.head_rotation_smoothers = [SmootherTEMA(0.1) for i in range(3)]
         self.head_translation_smoothers = [SmootherTEMA(0.1) for i in range(3)]
         self.mouth_ratio_smoothers = [SmootherKF() for i in range(2)]
-        self.left_iris_ratio_smoothers = [SmootherTEMA(0.06) for i in range(2)]
-        self.right_iris_ratio_smoothers = [SmootherTEMA(0.06) for i in range(2)]
-        # self.left_eye_ratio_smoother = SmootherKF()
-        # self.right_eye_ratio_smoother = SmootherKF()
-        self.eye_ratio_smoothers = [SmootherKF() for i in range(2)]
+        self.left_iris_ratio_smoothers = [SmootherTEMA(0.04) for i in range(2)]
+        self.right_iris_ratio_smoothers = [SmootherTEMA(0.04) for i in range(2)]
+        self.eye_ratio_smoothers = [SmootherTEMA(0.1) for i in range(2)]
 
         self.head_rotation = np.zeros((3, 1))
         self.head_translation = np.zeros((3, 1))
@@ -134,7 +140,6 @@ class ThreadedProcessing(Process):
         self.face_mesh = hh.face_mesh.FaceMeshDetector(debug=DEBUG)
 
         while not self.killed:
-            a = time.time()
             frame, start_time = self.iq.get()
 
             # get face landmarks
@@ -166,7 +171,17 @@ class ThreadedProcessing(Process):
                     self.right_iris_ratio[i] = self.right_iris_ratio_smoothers[i].state
                     self.eye_ratio_smoothers[i].update(raw_eye_ratios[i])
                     self.eye_ratios[i] = self.eye_ratio_smoothers[i].state
+
+                if self.head_rotation[1] > 15:
+                    self.right_iris_ratio = self.left_iris_ratio
+                elif self.head_rotation[1] < -15:
+                    self.left_iris_ratio = self.right_iris_ratio
+                else:
+                    old_left_iris_ratio = self.left_iris_ratio
+                    self.left_iris_ratio = lerp(0.4, self.left_iris_ratio, self.right_iris_ratio)
+                    self.right_iris_ratio = lerp(0.4, self.right_iris_ratio, old_left_iris_ratio)
                 
+
                 if DEBUG > 0:
                     # draw head pose axis
                     head_sin_pitch, head_sin_yaw, head_sin_roll = np.sin(np.deg2rad(self.head_rotation))
@@ -179,7 +194,6 @@ class ThreadedProcessing(Process):
                     ])
                     head_axis *= 80
                     head_axis += head_center
-
                     cv2.line(frame, (int(head_center[0]), int(head_center[1])), (int(head_axis[0][0]), int(head_axis[0][1])), (0, 0, 255), 3)
                     cv2.line(frame, (int(head_center[0]), int(head_center[1])), (int(head_axis[1][0]), int(head_axis[1][1])), (0, 255, 0), 3)
                     cv2.line(frame, (int(head_center[0]), int(head_center[1])), (int(head_axis[2][0]), int(head_axis[2][1])), (255, 0, 0), 3)
@@ -202,7 +216,7 @@ class ThreadedProcessing(Process):
                     },
                     "iris": {
                         "x": float((self.left_iris_ratio[0] + self.right_iris_ratio[0]) / 2.0),
-                        "y": float((self.left_iris_ratio[1] + self.right_iris_ratio[1]) / 2.0)
+                        "y": float((self.left_iris_ratio[1] + self.right_iris_ratio[1]) / 2.0) * -1.5
                     },
                     "eye": {
                         "left": float(self.eye_ratios[0]),
@@ -210,14 +224,15 @@ class ThreadedProcessing(Process):
                     },
                     "mouth": {
                         "x": float(self.mouth_ratio[0]),
-                        "y": float(self.mouth_ratio[1]) * 2 - 1
+                        "y": float(self.mouth_ratio[1]) * 2.0 - 1.0
                     }
                 }))
             except queue.Full:
                 continue
 
-            self.time_smoother.update(time.time() - a)
-            # eprint(self.time_smoother.state)
+            if DEBUG > 1:
+                self.time_smoother.update(time.time() - start_time)
+                eprint(self.time_smoother.state)
 
 
 def lerp(c, a, b):
