@@ -489,7 +489,7 @@ class FaceFeaturesCalculator:
         self.debug = debug
     
     def head(self, frame, lmks, norm_lmks):
-        face_2d = np.array([lmks[i] for i in [10, 54, 284, 9, 8, 122, 351, 68, 208, 152, 164]], dtype=np.float32)
+        #face_2d = np.array([lmks[i] for i in [10, 54, 284, 9, 8, 122, 351, 68, 208, 152, 164]], dtype=np.float32)
 
         _, self.head_rotation, self.head_translation = cv2.solvePnP(
                 MODEL_POINTS,
