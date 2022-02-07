@@ -7,8 +7,8 @@ const { Live2DModel } = PIXI.live2d;
         autoStart: true,
         backgroundAlpha: 0,
         backgroundColor: 0x00ff00,
-        width: 640,
-        height: 480,
+        width: 1280,
+        height: 720,
     });
 
     // load model
@@ -53,7 +53,7 @@ const { Live2DModel } = PIXI.live2d;
     app.stage.addChild(sprite);
 
     // receive tracking data from websocket
-    const ws = new WebSocket("ws://10.11.235.99:6789");
+    const ws = new WebSocket("ws://127.0.0.1:6789");
     ws.onmessage = ({ data }) => {
         const result = JSON.parse(data);
 
