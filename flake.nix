@@ -37,7 +37,7 @@
           #   '';
           # };
           devShell = (pkgs.buildFHSUserEnv {
-            name = "mozey-fhs";
+            name = "hoshihoshi-fhs";
             targetPkgs = pkgs: (with pkgs; [
               python3
               python3Packages.pip
@@ -47,7 +47,6 @@
               libGL
               glib
             ]);
-            runScript = "fish";
           }).env;
         }
       );
