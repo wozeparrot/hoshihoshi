@@ -92,7 +92,7 @@ const { Live2DModel } = PIXI.live2d;
             );
             core.setParamFloat(
                 "PARAM_EYE_BALL_Y",
-                result.iris.y
+                result.iris.y - 0.5
             );
 
             core.setParamFloat(
