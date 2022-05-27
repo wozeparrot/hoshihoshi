@@ -1,16 +1,16 @@
 {
   description = "hoshihoshi: A open source high performance vtubing platform";
 
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
   inputs.flake-utils.url = "github:numtide/flake-utils";
   inputs.pypi-deps-db = {
     url = "github:DavHau/pypi-deps-db";
     flake = false;
   };
   inputs.mach-nix = {
-    url = "github:DavHau/mach-nix?ref=3.3.0";
+    url = "github:DavHau/mach-nix";
     inputs = {
-      nixpkgs.follows = "nixpkgs";
+      # nixpkgs.follows = "nixpkgs";
       flake-utils.follows = "flake-utils";
       pypi-deps-db.follows = "pypi-deps-db";
     };
@@ -28,26 +28,21 @@
           mach-nix = inputs.mach-nix.lib."${system}";
         in
         rec {
-          # devShell = mach-nix.mkPythonShell {
-          #   requirements = ''
-          #     onnxruntime
-          #     opencv-python
-          #     mediapipe
-          #     numpy
-          #   '';
-          # };
-          devShell = (pkgs.buildFHSUserEnv {
-            name = "hoshihoshi-fhs";
-            targetPkgs = pkgs: (with pkgs; [
-              python3
-              python3Packages.pip
-              python3Packages.virtualenv
+          packages.hoshihoshi = mach-nix.buildPythonApplication {
+            pname = "hoshihoshi";
+            version = "0.1.0";
+            src = ./.;
+            requirements = builtins.readFile ./requirements.txt;
 
-              zlib
-              libGL
-              glib
-            ]);
-          }).env;
+            postInstall = ''
+              cp -R hh $out/bin
+              cp -R index $out/bin
+            '';
+          };
+
+          devShell = mach-nix.mkPythonShell {
+            requirements = builtins.readFile ./requirements.txt;
+          };
         }
       );
 }

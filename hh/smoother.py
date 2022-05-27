@@ -15,7 +15,7 @@ class SmootherKF:
         self.state = 0.0
         self.measurement = np.zeros((1, 1), dtype=np.float32)
         self.prediction = np.zeros((2, 1), dtype=np.float32)
-    
+
     def update(self, measurement):
         self.prediction = self.filter.predict()
 
@@ -32,7 +32,7 @@ class SmootherDEMA:
         self.ema_ema = 0.0
         self.ema = 0.0
         self.state = 0.0
-    
+
     def update(self, measurement):
         self.ema = ema(self.a, measurement, self.ema)
         self.ema_ema = ema(self.a, self.ema, self.ema_ema)
@@ -47,14 +47,14 @@ class SmootherTEMA:
         self.ema_ema = 0.0
         self.ema = 0.0
         self.state = 0.0
-    
+
     def update(self, measurement):
         self.ema = ema(self.a, measurement, self.ema)
         self.ema_ema = ema(self.a, self.ema, self.ema_ema)
         self.ema_ema_ema = ema(self.a, self.ema_ema, self.ema_ema_ema)
 
         self.state = (3.0 * self.ema) - (3.0 * self.ema_ema) + self.ema_ema_ema
-        
+
 
 def ema(a, l, s):
     return (a * l) + ((1.0 - a) * s)

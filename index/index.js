@@ -7,43 +7,39 @@ const { Live2DModel } = PIXI.live2d;
         autoStart: true,
         backgroundAlpha: 0,
         backgroundColor: 0x00ff00,
-        width: 1280,
-        height: 720,
+        width: 1920,
+        height: 1080,
     });
 
     // load model
     const model = await Live2DModel.from("https://iseng-domathid.vercel.app/rem/model.json", { autoInteract: false });
-    const motion = model.internalModel.motionManager;
     const core = model.internalModel.coreModel;
     model.anchor.set(0.5, 0.5);
-    model.position.set(app.screen.width / 2, app.screen.height / 1.5);
-    model.scale.set(0.4);
+    model.centerOffsetX = 1920/2;
+    model.centerOffsetY = 1080/2;
+    model.scaleOffset = 0;
     model.interactive = true;
 
     // render to rendertexture and sprite
     const renderTexture = new PIXI.RenderTexture(new PIXI.BaseRenderTexture(app.screen.width, app.screen.height));
     const sprite = new PIXI.Sprite(renderTexture);
     document.querySelector("#live2d").addEventListener("pointerdown", e => {
-        model.offsetX = e.x - model.position.x;
-        model.offsetY = e.y - model.position.y;
+        model.offsetX = e.x - model.centerOffsetX;
+        model.offsetY = e.y - model.centerOffsetY;
         model.dragging = true;
     });
-    document.querySelector("#live2d").addEventListener("pointerup", e => {
+    document.querySelector("#live2d").addEventListener("pointerup", () => {
         model.dragging = false;
     });
     document.querySelector("#live2d").addEventListener("pointermove", e => {
         if (model.dragging) {
-            model.position.set(
-                e.x - model.offsetX,
-                e.y - model.offsetY
-            );
+            model.centerOffsetX = e.x - model.offsetX;
+            model.centerOffsetY = e.y - model.offsetY;
         }
     });
     document.querySelector("#live2d").addEventListener("wheel", e => {
         e.preventDefault();
-        model.scale.set(
-            model.scale.x + e.deltaY * -0.0001
-        );
+        model.scaleOffset = model.scaleOffset - e.deltaY * -0.0001;
     });
 
     // render every tick
@@ -57,7 +53,18 @@ const { Live2DModel } = PIXI.live2d;
     ws.onmessage = ({ data }) => {
         const result = JSON.parse(data);
 
-        model.internalModel.motionManager.update = (...args) => {
+        const scaled_translation_x = result.head_translation.x * 10;
+        const scaled_translation_y = result.head_translation.y * 10;
+        model.position.set(
+            scaled_translation_x + model.centerOffsetX,
+            scaled_translation_y + model.centerOffsetY,
+        );
+        const scaled_translation_z = 1.5 - Math.min(Math.max(result.head_translation.z / 60, 0.0), 1.5 - 0.1);
+        model.scale.set(
+            scaled_translation_z - model.scaleOffset
+        );
+
+        model.internalModel.motionManager.update = () => {
             model.internalModel.eyeBlink = undefined;
 
             core.setParamFloat(
@@ -100,7 +107,7 @@ const { Live2DModel } = PIXI.live2d;
                 result.mouth.y,
             );
             core.setParamFloat(
-                "PARAM_MOUTH_FROM",
+                "PARAM_MOUTH_FORM",
                 result.mouth.x,
             );
 

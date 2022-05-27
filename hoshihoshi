@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # python stdlib imports
 from argparse import ArgumentParser
 from multiprocessing import Process, Queue
@@ -6,9 +8,9 @@ import threading
 import time
 import signal
 import sys
-import math
 from typing import Tuple
 import json
+from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 # 3rd party imports
 import cv2
@@ -23,23 +25,50 @@ from hh.smoother import SmootherKF, SmootherDEMA, SmootherTEMA
 
 
 # --- CONFIG ---
-DEBUG = 1
-
+DEBUG = 0
+SETTINGS = {
+    "exaggeration_factor": 1.0,
+    "head": {
+        "rotation_offsets": (12, 5, 0.12),
+    },
+    "eye": {
+        "exaggeration_factor": 1.0,
+    },
+}
 
 # --- MAIN ---
 # thread event to stop all threads
 stop_all = threading.Event()
 
 
+class ThreadedServer(Process):
+    def __init__(self):
+        super(ThreadedServer, self).__init__()
+
+        self.killed = False
+
+    def stop(self):
+        self.killed = True
+        self.httpd.shutdown()
+
+    def run(self):
+        class Handler(SimpleHTTPRequestHandler):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, directory="index/", **kwargs)
+
+        self.httpd = HTTPServer(("", 8080), Handler)
+        self.httpd.serve_forever()
+
+
 class ThreadedCapture(Process):
-    def __init__(self, q: Queue, src=0, width=640, height=480):
+    def __init__(self, q: Queue, src=0, frame_size=(320, 240)):
         super(ThreadedCapture, self).__init__()
 
         self.q = q
 
         self.cap = cv2.VideoCapture(src)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, frame_size[0])
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, frame_size[1])
 
         self.killed = False
 
@@ -82,6 +111,11 @@ class ThreadedOutput(Process):
 
         server.set_fn_new_client(ws_new_client)
 
+        def ws_client_leave(client, server):
+            clients.remove(client)
+
+        server.set_fn_client_left(ws_client_leave)
+
         def ws_message(client, server, message):
             if len(clients) >= 2:
                 for i in range(1, len(clients)):
@@ -92,13 +126,17 @@ class ThreadedOutput(Process):
         while not self.killed:
             f = self.q.get()
             if len(clients) > 0:
-                server.send_message(clients[0], json.dumps(f[2]))
+                try:
+                    server.send_message_to_all(json.dumps(f[2]))
+                except:
+                    pass
 
-            b, jpeg = cv2.imencode(".jpg", f[0])
-            if not b:
-                continue
+            if DEBUG > 0:
+                b, jpeg = cv2.imencode(".jpg", f[0])
+                if not b:
+                    continue
 
-            sys.stdout.buffer.write(jpeg.tobytes())
+                sys.stdout.buffer.write(jpeg.tobytes())
 
 
 class ThreadedProcessing(Process):
@@ -106,27 +144,23 @@ class ThreadedProcessing(Process):
         self,
         iq: Queue,
         oq: Queue,
-        frame_size: Tuple = (640, 480),
-        head_rotation_offsets=(0, 0, 0),
+        frame_size: Tuple = (320, 240),
     ):
         super(ThreadedProcessing, self).__init__()
 
         self.iq = iq
         self.oq = oq
 
-        self.head_rotation_offsets = head_rotation_offsets
-
-        # self.face_mesh = hh.face_mesh.FaceMeshDetector(debug=DEBUG) # for some reason doesn't work if initialized here
         self.face_features = hh.face_features.FaceFeaturesCalculator(
             frame_size, debug=DEBUG
         )
 
-        self.head_rotation_smoothers = [SmootherTEMA(0.1) for i in range(3)]
-        self.head_translation_smoothers = [SmootherTEMA(0.1) for i in range(3)]
-        self.mouth_ratio_smoothers = [SmootherKF() for i in range(2)]
-        self.left_iris_ratio_smoothers = [SmootherTEMA(0.04) for i in range(2)]
-        self.right_iris_ratio_smoothers = [SmootherTEMA(0.04) for i in range(2)]
-        self.eye_ratio_smoothers = [SmootherTEMA(0.1) for i in range(2)]
+        self.head_rotation_smoothers = [SmootherTEMA(0.1) for _ in range(3)]
+        self.head_translation_smoothers = [SmootherTEMA(0.1) for _ in range(3)]
+        self.mouth_ratio_smoothers = [SmootherKF() for _ in range(2)]
+        self.left_iris_ratio_smoothers = [SmootherTEMA(0.1) for _ in range(2)]
+        self.right_iris_ratio_smoothers = [SmootherTEMA(0.1) for _ in range(2)]
+        self.eye_ratio_smoothers = [SmootherTEMA(0.1) for _ in range(2)]
 
         self.head_rotation = np.zeros((3, 1))
         self.head_translation = np.zeros((3, 1))
@@ -153,6 +187,7 @@ class ThreadedProcessing(Process):
         self.killed = True
 
     def run(self):
+        # initialize face landmark system
         self.face_mesh = hh.face_mesh.FaceMeshDetector(debug=DEBUG)
 
         while not self.killed:
@@ -174,10 +209,13 @@ class ThreadedProcessing(Process):
                     self.head_rotation_smoothers[i].update(raw_head_rotation[i])
                     self.head_rotation[i] = (
                         self.head_rotation_smoothers[i].state
-                        + self.head_rotation_offsets[i]
-                    )
+                        + SETTINGS["head"]["rotation_offsets"][i]
+                    ) * SETTINGS["exaggeration_factor"]
                     self.head_translation_smoothers[i].update(raw_head_translation[i])
-                    self.head_translation[i] = self.head_translation_smoothers[i].state
+                    self.head_translation[i] = (
+                        self.head_translation_smoothers[i].state
+                        * SETTINGS["exaggeration_factor"]
+                    )
 
                 # get mouth tracking data
                 frame, raw_mouth_ratio = self.face_features.mouth(
@@ -185,7 +223,10 @@ class ThreadedProcessing(Process):
                 )
                 for i in range(2):
                     self.mouth_ratio_smoothers[i].update(raw_mouth_ratio[i])
-                    self.mouth_ratio[i] = self.mouth_ratio_smoothers[i].state
+                    self.mouth_ratio[i] = (
+                        self.mouth_ratio_smoothers[i].state
+                        * SETTINGS["exaggeration_factor"]
+                    )
 
                 # get iris tracking data
                 (
@@ -196,11 +237,23 @@ class ThreadedProcessing(Process):
                 ) = self.face_features.eye(frame, lmks, norm_lmks)
                 for i in range(2):
                     self.left_iris_ratio_smoothers[i].update(raw_left_iris_ratio[i])
-                    self.left_iris_ratio[i] = self.left_iris_ratio_smoothers[i].state
+                    self.left_iris_ratio[i] = (
+                        self.left_iris_ratio_smoothers[i].state
+                        * SETTINGS["exaggeration_factor"]
+                        * SETTINGS["eye"]["exaggeration_factor"]
+                    )
                     self.right_iris_ratio_smoothers[i].update(raw_right_iris_ratio[i])
-                    self.right_iris_ratio[i] = self.right_iris_ratio_smoothers[i].state
+                    self.right_iris_ratio[i] = (
+                        self.right_iris_ratio_smoothers[i].state
+                        * SETTINGS["exaggeration_factor"]
+                        * SETTINGS["eye"]["exaggeration_factor"]
+                    )
                     self.eye_ratio_smoothers[i].update(raw_eye_ratios[i])
-                    self.eye_ratios[i] = self.eye_ratio_smoothers[i].state
+                    self.eye_ratios[i] = (
+                        self.eye_ratio_smoothers[i].state
+                        * SETTINGS["exaggeration_factor"]
+                        * SETTINGS["eye"]["exaggeration_factor"]
+                    )
 
                 if self.head_rotation[1] > 15:
                     self.right_iris_ratio = self.left_iris_ratio
@@ -209,10 +262,10 @@ class ThreadedProcessing(Process):
                 else:
                     old_left_iris_ratio = self.left_iris_ratio
                     self.left_iris_ratio = lerp(
-                        0.4, self.left_iris_ratio, self.right_iris_ratio
+                        0.45, self.left_iris_ratio, self.right_iris_ratio
                     )
                     self.right_iris_ratio = lerp(
-                        0.4, self.right_iris_ratio, old_left_iris_ratio
+                        0.45, self.right_iris_ratio, old_left_iris_ratio
                     )
 
                 if DEBUG > 0:
@@ -292,7 +345,7 @@ class ThreadedProcessing(Process):
             try:
                 self.oq.put_nowait(
                     (
-                        frame,
+                        frame if DEBUG > 0 else None,
                         start_time,
                         {
                             "head_rotation": {
@@ -310,11 +363,10 @@ class ThreadedProcessing(Process):
                                     (self.left_iris_ratio[0] + self.right_iris_ratio[0])
                                     / 2.0
                                 ),
-                                "y": float(
+                                "y": -float(
                                     (self.left_iris_ratio[1] + self.right_iris_ratio[1])
                                     / 2.0
-                                )
-                                * -1.5,
+                                ),
                             },
                             "eye": {
                                 "left": float(self.eye_ratios[0]),
@@ -348,17 +400,23 @@ def main(args) -> None:
     out = ThreadedOutput(out_queue)
     out.start()
 
-    proc = ThreadedProcessing(cap_queue, out_queue, head_rotation_offsets=(12, 5, 0.12))
+    proc = ThreadedProcessing(cap_queue, out_queue)
     proc.start()
+
+    serv = ThreadedServer()
+    serv.start()
 
     stop_all.wait()
 
+    serv.terminate()
     out.terminate()
     proc.terminate()
     cap.terminate()
 
 
+# catch sigint to cleanup nicely
 def signal_handler(sig, frame):
+    _ = sig, frame
     stop_all.set()
 
 
@@ -367,6 +425,6 @@ signal.signal(signal.SIGINT, signal_handler)
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--camera", type=int, help="camera number", default=0)
+    parser.add_argument("--camera", type=str, help="camera to read from", default=0)
 
     main(parser.parse_args())

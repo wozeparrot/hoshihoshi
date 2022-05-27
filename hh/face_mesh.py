@@ -1,8 +1,6 @@
 import mediapipe as mp
 import numpy as np
 
-from hh.utils import eprint
-
 
 class FaceMeshDetector:
     def __init__(self, min_detection=0.5, min_tracking=0.5, debug=0):
@@ -18,7 +16,7 @@ class FaceMeshDetector:
             self.drawing_spec = mp.solutions.drawing_utils.DrawingSpec(thickness=1, circle_radius=1)
 
         self.debug = debug
-    
+
     def run(self, frame):
         res = self.mp_face_mesh.process(frame)
 
@@ -41,7 +39,7 @@ class FaceMeshDetector:
                     lmks.append((x, y))
                 # add all points
                 norm_lmks.append((lmk.x, lmk.y, lmk.z))
-            
+
             return frame, np.array(lmks, dtype=np.float32), np.array(norm_lmks, dtype=np.float32)
         else:
             return frame, None, None
