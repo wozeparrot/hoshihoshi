@@ -21,11 +21,11 @@ from websocket_server import WebsocketServer as WSServer
 # import our own stuff
 import hh.face_mesh
 import hh.face_features
-from hh.smoother import SmootherKF, SmootherDEMA, SmootherTEMA
+from hh.smoother import SmootherKF, SmootherDEMA, SmootherTEMA, SmootherOneEuro
 
 
 # --- CONFIG ---
-DEBUG = 0
+DEBUG = 2
 SETTINGS = {
     "exaggeration_factor": 1.0,
     "head": {
@@ -155,12 +155,12 @@ class ThreadedProcessing(Process):
             frame_size, debug=DEBUG
         )
 
-        self.head_rotation_smoothers = [SmootherTEMA(0.1) for _ in range(3)]
-        self.head_translation_smoothers = [SmootherTEMA(0.1) for _ in range(3)]
-        self.mouth_ratio_smoothers = [SmootherKF() for _ in range(2)]
-        self.left_iris_ratio_smoothers = [SmootherTEMA(0.1) for _ in range(2)]
-        self.right_iris_ratio_smoothers = [SmootherTEMA(0.1) for _ in range(2)]
-        self.eye_ratio_smoothers = [SmootherTEMA(0.1) for _ in range(2)]
+        self.head_rotation_smoothers = [SmootherOneEuro(0.004, 0.7, 1.0) for _ in range(3)]
+        self.head_translation_smoothers = [SmootherOneEuro(0.004, 0.7, 1.0) for _ in range(3)]
+        self.mouth_ratio_smoothers = [SmootherOneEuro(0.004, 0.7, 1.0) for _ in range(2)]
+        self.left_iris_ratio_smoothers = [SmootherOneEuro(0.004, 0.7, 1.0) for _ in range(2)]
+        self.right_iris_ratio_smoothers = [SmootherOneEuro(0.004, 0.7, 1.0) for _ in range(2)]
+        self.eye_ratio_smoothers = [SmootherOneEuro(0.004, 0.7, 1.0) for _ in range(2)]
 
         self.head_rotation = np.zeros((3, 1))
         self.head_translation = np.zeros((3, 1))
@@ -170,6 +170,8 @@ class ThreadedProcessing(Process):
         self.eye_ratios = np.zeros((2, 1))
 
         self.time_smoother = SmootherKF()
+        self.prev_time = time.time()
+        self.dt = 0.0
 
         self.camera_matrix = np.array(
             [
@@ -190,6 +192,7 @@ class ThreadedProcessing(Process):
         # initialize face landmark system
         self.face_mesh = hh.face_mesh.FaceMeshDetector(debug=DEBUG)
 
+        self.dt = time.time() - self.prev_time
         while not self.killed:
             frame, start_time = self.iq.get()
 
@@ -206,12 +209,12 @@ class ThreadedProcessing(Process):
                     raw_head_translation,
                 ) = self.face_features.head(frame, lmks, norm_lmks)
                 for i in range(3):
-                    self.head_rotation_smoothers[i].update(raw_head_rotation[i])
+                    self.head_rotation_smoothers[i].update(raw_head_rotation[i], self.dt)
                     self.head_rotation[i] = (
                         self.head_rotation_smoothers[i].state
                         + SETTINGS["head"]["rotation_offsets"][i]
                     ) * SETTINGS["exaggeration_factor"]
-                    self.head_translation_smoothers[i].update(raw_head_translation[i])
+                    self.head_translation_smoothers[i].update(raw_head_translation[i], self.dt)
                     self.head_translation[i] = (
                         self.head_translation_smoothers[i].state
                         * SETTINGS["exaggeration_factor"]
@@ -222,7 +225,7 @@ class ThreadedProcessing(Process):
                     frame, lmks, norm_lmks
                 )
                 for i in range(2):
-                    self.mouth_ratio_smoothers[i].update(raw_mouth_ratio[i])
+                    self.mouth_ratio_smoothers[i].update(raw_mouth_ratio[i], self.dt)
                     self.mouth_ratio[i] = (
                         self.mouth_ratio_smoothers[i].state
                         * SETTINGS["exaggeration_factor"]
@@ -236,19 +239,19 @@ class ThreadedProcessing(Process):
                     raw_eye_ratios,
                 ) = self.face_features.eye(frame, lmks, norm_lmks)
                 for i in range(2):
-                    self.left_iris_ratio_smoothers[i].update(raw_left_iris_ratio[i])
+                    self.left_iris_ratio_smoothers[i].update(raw_left_iris_ratio[i], self.dt)
                     self.left_iris_ratio[i] = (
                         self.left_iris_ratio_smoothers[i].state
                         * SETTINGS["exaggeration_factor"]
                         * SETTINGS["eye"]["exaggeration_factor"]
                     )
-                    self.right_iris_ratio_smoothers[i].update(raw_right_iris_ratio[i])
+                    self.right_iris_ratio_smoothers[i].update(raw_right_iris_ratio[i], self.dt)
                     self.right_iris_ratio[i] = (
                         self.right_iris_ratio_smoothers[i].state
                         * SETTINGS["exaggeration_factor"]
                         * SETTINGS["eye"]["exaggeration_factor"]
                     )
-                    self.eye_ratio_smoothers[i].update(raw_eye_ratios[i])
+                    self.eye_ratio_smoothers[i].update(raw_eye_ratios[i], self.dt)
                     self.eye_ratios[i] = (
                         self.eye_ratio_smoothers[i].state
                         * SETTINGS["exaggeration_factor"]
@@ -383,8 +386,11 @@ class ThreadedProcessing(Process):
                 continue
 
             if DEBUG > 1:
-                self.time_smoother.update(time.time() - start_time)
+                self.time_smoother.update(time.time() - start_time, time.time() - self.prev_time)
                 eprint(self.time_smoother.state)
+
+            self.dt = time.time() - self.prev_time
+            self.prev_time = time.time()
 
 
 def lerp(c, a, b):
