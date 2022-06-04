@@ -25,7 +25,7 @@ from hh.smoother import SmootherKF, SmootherDEMA, SmootherTEMA, SmootherOneEuro
 
 
 # --- CONFIG ---
-DEBUG = 2
+DEBUG = 0
 SETTINGS = {
     "exaggeration_factor": 1.0,
     "head": {
