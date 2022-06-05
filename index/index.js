@@ -1,18 +1,41 @@
-const { Live2DModel } = PIXI.live2d;
+const { Live2DModel, ZipLoader } = PIXI.live2d;
 
-(async function main() {
+// register zip loading
+ZipLoader.zipReader = (data, url) => JSZip.loadAsync(data);
+ZipLoader.readText = (reader, path) => {
+    const file = reader.file(path);
+    return file.async('text');
+}
+ZipLoader.getFilePaths = (reader) => {
+    const paths = [];
+    reader.forEach((relPath) => paths.push(relPath));
+    return Promise.resolve(paths);
+}
+ZipLoader.getFiles = (reader, paths) =>
+    Promise.all(paths.map(async path => {
+        const name = path.slice(path.lastIndexOf("/") + 1);
+        const blob = await reader.file(path).async('blob');
+        return new File([blob], name);
+    }));
+
+document.getElementById("zippicker").addEventListener("change", async (event) => {
+    const files = event.target.files;
+    if (!files.length) return;
+
+    // hide picker
+    document.getElementById("zp_container").style.display = "none";
+
     // create pixi application
     const app = new PIXI.Application({
         view: document.getElementById("live2d"),
         autoStart: true,
         backgroundAlpha: 0,
         backgroundColor: 0x00ff00,
-        width: 1920,
-        height: 1080,
+        resizeTo: window,
     });
 
     // load model
-    const model = await Live2DModel.from("https://iseng-domathid.vercel.app/rem/model.json", { autoInteract: false });
+    const model = await Live2DModel.from([files[0]], { autoInteract: false });
     const core = model.internalModel.coreModel;
     model.anchor.set(0.5, 0.5);
     model.centerOffsetX = 1920/2;
@@ -49,7 +72,7 @@ const { Live2DModel } = PIXI.live2d;
     app.stage.addChild(sprite);
 
     // receive tracking data from websocket
-    const ws = new WebSocket("ws://127.0.0.1:6789");
+    const ws = new WebSocket("ws://" + window.location.host + ":6789");
     ws.onmessage = ({ data }) => {
         const result = JSON.parse(data);
 
@@ -116,7 +139,5 @@ const { Live2DModel } = PIXI.live2d;
 
             return true;
         };
-
-        // ws.send(app.renderer.plugins.extract.base64(renderTexture));
     };
-})();
+});

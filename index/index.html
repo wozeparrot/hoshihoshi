@@ -6,18 +6,37 @@
         <script src="/static/pixi.min.js"></script>
         <script src="/static/pixi-legacy.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display/dist/index.min.js"></script>
+        <script src="/static/jszip.min.js"></script>
 
         <style>
             html, body {
                 background-color: #000000;
+                padding: 0;
+                margin: 0;
+            }
+            .container {
                 display: flex;
-                justify-content: right;
-                align-items: right;
+                justify-content: center;
+                align-items: center;
+                width: 100%;
+                height: 100%;
+            }
+            #zippicker {
+                width: 9.8rem;
+                border-radius: 4px;
+                background-color: #151510;
+                color: #d2cad3;
+                font-size: 2rem;
             }
         </style>
     </head>
 
-    <canvas id="live2d"></canvas>
+    <body>
+        <div class="container" id="zp_container">
+            <input type="file" id="zippicker" accept=".zip">
+        </div>
+        <canvas id="live2d"></canvas>
+    </body>
 
     <script type="module" src="/index.js"></script>
 </html>
