@@ -40,7 +40,7 @@ document.getElementById("zippicker").addEventListener("change", async (event) =>
     model.anchor.set(0.5, 0.5);
     model.centerOffsetX = 1920/2;
     model.centerOffsetY = 1080/2;
-    model.scaleOffset = 0;
+    model.scaleOffset = 0.5;
     model.interactive = true;
 
     // render to rendertexture and sprite
@@ -72,7 +72,7 @@ document.getElementById("zippicker").addEventListener("change", async (event) =>
     app.stage.addChild(sprite);
 
     // receive tracking data from websocket
-    const ws = new WebSocket("ws://" + window.location.host + ":6789");
+    const ws = new WebSocket("ws://" + window.location.hostname + ":6789");
     ws.onmessage = ({ data }) => {
         const result = JSON.parse(data);
 
