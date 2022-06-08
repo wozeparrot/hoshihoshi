@@ -29,7 +29,7 @@ DEBUG = 0
 SETTINGS = {
     "exaggeration_factor": 1.0,
     "head": {
-        "rotation_offsets": (12, 5, 0.12),
+        "rotation_offsets": (24, 5, 0.12),
     },
     "eye": {
         "exaggeration_factor": 1.0,

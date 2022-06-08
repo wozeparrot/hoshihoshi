@@ -163,8 +163,8 @@ class FaceFeaturesCalculator:
             right_iris_ratio_x = lerp(0.2, right_iris_ratio_x, old_left_iris_ratio_x)
             right_iris_ratio_y = lerp(0.2, right_iris_ratio_y, old_left_iris_ratio_y)
 
-        left_eye_ratio = 1.0 - remap(left_eye_ratio / 6, 0.53, 0.6)
-        right_eye_ratio = 1.0 - remap(right_eye_ratio / 6, 0.53, 0.6)
+        left_eye_ratio = 1.0 - remap(left_eye_ratio / 6, 0.52, 0.62)
+        right_eye_ratio = 1.0 - remap(right_eye_ratio / 6, 0.52, 0.62)
 
         return (
             frame,
