@@ -90,52 +90,39 @@ document.getElementById("zippicker").addEventListener("change", async (event) =>
         model.internalModel.motionManager.update = () => {
             model.internalModel.eyeBlink = undefined;
 
-            core.setParamFloat(
-                "PARAM_ANGLE_X",
-                result.head_rotation.y,
-            );
-            core.setParamFloat(
-                "PARAM_ANGLE_Y",
-                -result.head_rotation.x + 180,
-            );
-            core.setParamFloat(
-                "PARAM_ANGLE_Z",
-                -result.head_rotation.z,
-            );
+            // core.setParamFloat("PARAM_ANGLE_X", result.head_rotation.y);
+            // core.setParamFloat("PARAM_ANGLE_Y", -result.head_rotation.x + 180);
+            // core.setParamFloat("PARAM_ANGLE_Z", -result.head_rotation.z);
+            //
+            // core.setParamFloat("PARAM_BODY_ANGLE_X", result.head_rotation.y * 0.3);
+            // core.setParamFloat("PARAM_BODY_ANGLE_Y", (-result.head_rotation.x + 180) * 0.3);
+            // core.setParamFloat("PARAM_BODY_ANGLE_Z", -result.head_rotation.z * 0.3);
+            //
+            // core.setParamFloat("PARAM_EYE_BALL_X", result.iris.x);
+            // core.setParamFloat("PARAM_EYE_BALL_Y", result.iris.y - 0.5);
+            //
+            // core.setParamFloat("PARAM_MOUTH_OPEN_Y", result.mouth.y);
+            // core.setParamFloat("PARAM_MOUTH_FORM", result.mouth.x);
+            //
+            // core.setParamFloat("PARAM_EYE_L_OPEN", result.eye.left);
+            // core.setParamFloat("PARAM_EYE_R_OPEN", result.eye.right);
 
-            core.setParamFloat(
-                "PARAM_BODY_ANGLE_X",
-                result.head_rotation.y * 0.3,
-            );
-            core.setParamFloat(
-                "PARAM_BODY_ANGLE_Y",
-                (-result.head_rotation.x + 180) * 0.3,
-            );
-            core.setParamFloat(
-                "PARAM_BODY_ANGLE_Z",
-                -result.head_rotation.z * 0.3,
-            );
+            core.setParameterValueById("ParamAngleX", result.head_rotation.y);
+            core.setParameterValueById("ParamAngleY", -result.head_rotation.x + 180);
+            core.setParameterValueById("ParamAngleZ", -result.head_rotation.z);
 
-            core.setParamFloat(
-                "PARAM_EYE_BALL_X",
-                result.iris.x
-            );
-            core.setParamFloat(
-                "PARAM_EYE_BALL_Y",
-                result.iris.y - 0.5
-            );
+            core.setParameterValueById("ParamBodyAngleX", result.head_rotation.y * 0.3);
+            core.setParameterValueById("ParamBodyAngleY", (-result.head_rotation.x + 180) * 0.3);
+            core.setParameterValueById("ParamBodyAngleZ", -result.head_rotation.z * 0.3);
 
-            core.setParamFloat(
-                "PARAM_MOUTH_OPEN_Y",
-                result.mouth.y,
-            );
-            core.setParamFloat(
-                "PARAM_MOUTH_FORM",
-                result.mouth.x,
-            );
+            core.setParameterValueById("ParamEyeBallX", result.iris.x);
+            core.setParameterValueById("ParamEyeBallY", result.iris.y - 0.5);
 
-            core.setParamFloat("PARAM_EYE_L_OPEN", result.eye.left);
-            core.setParamFloat("PARAM_EYE_R_OPEN", result.eye.right);
+            core.setParameterValueById("ParamMouthOpenY", result.mouth.y);
+            core.setParameterValueById("ParamMouthForm", result.mouth.x);
+
+            core.setParameterValueById("ParamEyeLOpen", result.eye.left);
+            core.setParameterValueById("ParamEyeROpen", result.eye.right);
 
             return true;
         };
