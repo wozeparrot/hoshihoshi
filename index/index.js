@@ -82,7 +82,7 @@ document.getElementById("zippicker").addEventListener("change", async (event) =>
             scaled_translation_x + model.centerOffsetX,
             scaled_translation_y + model.centerOffsetY,
         );
-        const scaled_translation_z = 1.5 - Math.min(Math.max(result.head_translation.z / 60, 0.0), 1.5 - 0.1);
+        const scaled_translation_z = 1.5 - Math.min(Math.max(result.head_translation.z / 480, 0.0), 1.5 - 0.1);
         model.scale.set(
             scaled_translation_z - model.scaleOffset
         );
