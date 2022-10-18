@@ -23,11 +23,10 @@
         let
           pkgs = import nixpkgs {
             inherit system;
-            config.allowUnfree = true;
           };
           mach-nix = inputs.mach-nix.lib."${system}";
         in
-        rec {
+        {
           packages.hoshihoshi = mach-nix.buildPythonApplication {
             pname = "hoshihoshi";
             version = "0.1.0";
