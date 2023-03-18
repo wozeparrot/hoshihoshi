@@ -25,11 +25,11 @@ from hh.smoother import SmootherKF, SmootherDEMA, SmootherTEMA, SmootherOneEuro
 
 
 # --- CONFIG ---
-DEBUG = 0
+DEBUG = 1
 SETTINGS = {
     "exaggeration_factor": 1.0,
     "head": {
-        "rotation_offsets": (24, 5, 0.12),
+        "rotation_offsets": (20, 0, 0),
     },
     "eye": {
         "exaggeration_factor": 1.0,
@@ -70,6 +70,7 @@ class ThreadedCapture(Process):
         assert self.cap.isOpened(), "Cannot open camera"
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, frame_size[0])
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, frame_size[1])
+        self.cap.set(cv2.CAP_PROP_FPS, 1)
 
         self.killed = False
 
@@ -82,6 +83,7 @@ class ThreadedCapture(Process):
 
             g, f = self.cap.read()
             if g:
+                f = cv2.flip(f, 0)
                 try:
                     self.q.put_nowait((f, start_time))
                 except queue.Full:
@@ -156,11 +158,21 @@ class ThreadedProcessing(Process):
             frame_size, debug=DEBUG
         )
 
-        self.head_rotation_smoothers = [SmootherOneEuro(0.004, 0.7, 1.0) for _ in range(3)]
-        self.head_translation_smoothers = [SmootherOneEuro(0.004, 0.7, 1.0) for _ in range(3)]
-        self.mouth_ratio_smoothers = [SmootherOneEuro(0.004, 0.7, 1.0) for _ in range(2)]
-        self.left_iris_ratio_smoothers = [SmootherOneEuro(0.004, 0.7, 1.0) for _ in range(2)]
-        self.right_iris_ratio_smoothers = [SmootherOneEuro(0.004, 0.7, 1.0) for _ in range(2)]
+        self.head_rotation_smoothers = [
+            SmootherOneEuro(0.004, 0.7, 1.0) for _ in range(3)
+        ]
+        self.head_translation_smoothers = [
+            SmootherOneEuro(0.004, 0.7, 1.0) for _ in range(3)
+        ]
+        self.mouth_ratio_smoothers = [
+            SmootherOneEuro(0.004, 0.7, 1.0) for _ in range(2)
+        ]
+        self.left_iris_ratio_smoothers = [
+            SmootherOneEuro(0.004, 0.7, 1.0) for _ in range(2)
+        ]
+        self.right_iris_ratio_smoothers = [
+            SmootherOneEuro(0.004, 0.7, 1.0) for _ in range(2)
+        ]
         self.eye_ratio_smoothers = [SmootherOneEuro(0.004, 0.7, 1.0) for _ in range(2)]
 
         self.head_rotation = np.zeros((3, 1))
@@ -210,12 +222,16 @@ class ThreadedProcessing(Process):
                     raw_head_translation,
                 ) = self.face_features.head(frame, lmks, norm_lmks)
                 for i in range(3):
-                    self.head_rotation_smoothers[i].update(raw_head_rotation[i], self.dt)
+                    self.head_rotation_smoothers[i].update(
+                        raw_head_rotation[i], self.dt
+                    )
                     self.head_rotation[i] = (
                         self.head_rotation_smoothers[i].state
-                        + SETTINGS["head"]["rotation_offsets"][i]
-                    ) * SETTINGS["exaggeration_factor"]
-                    self.head_translation_smoothers[i].update(raw_head_translation[i], self.dt)
+                        * SETTINGS["exaggeration_factor"]
+                    ) + SETTINGS["head"]["rotation_offsets"][i]
+                    self.head_translation_smoothers[i].update(
+                        raw_head_translation[i], self.dt
+                    )
                     self.head_translation[i] = (
                         self.head_translation_smoothers[i].state
                         * SETTINGS["exaggeration_factor"]
@@ -240,13 +256,17 @@ class ThreadedProcessing(Process):
                     raw_eye_ratios,
                 ) = self.face_features.eye(frame, lmks, norm_lmks)
                 for i in range(2):
-                    self.left_iris_ratio_smoothers[i].update(raw_left_iris_ratio[i], self.dt)
+                    self.left_iris_ratio_smoothers[i].update(
+                        raw_left_iris_ratio[i], self.dt
+                    )
                     self.left_iris_ratio[i] = (
                         self.left_iris_ratio_smoothers[i].state
                         * SETTINGS["exaggeration_factor"]
                         * SETTINGS["eye"]["exaggeration_factor"]
                     )
-                    self.right_iris_ratio_smoothers[i].update(raw_right_iris_ratio[i], self.dt)
+                    self.right_iris_ratio_smoothers[i].update(
+                        raw_right_iris_ratio[i], self.dt
+                    )
                     self.right_iris_ratio[i] = (
                         self.right_iris_ratio_smoothers[i].state
                         * SETTINGS["exaggeration_factor"]
@@ -387,7 +407,9 @@ class ThreadedProcessing(Process):
                 continue
 
             if DEBUG > 1:
-                self.time_smoother.update(time.time() - start_time, time.time() - self.prev_time)
+                self.time_smoother.update(
+                    time.time() - start_time, time.time() - self.prev_time
+                )
                 eprint(self.time_smoother.state)
 
             self.dt = time.time() - self.prev_time

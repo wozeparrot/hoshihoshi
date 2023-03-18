@@ -1,7 +1,9 @@
+import math
+
 import cv2
 import numpy as np
 
-from hh.utils import lerp, remap
+from hh.utils import eprint, lerp, norm_angle, remap
 from hh.face_model import ADJ_MODEL_INDICES, MODEL_POINTS
 
 
@@ -23,27 +25,30 @@ class FaceFeaturesCalculator:
         self.debug = debug
 
     def head(self, frame, lmks, norm_lmks):
-        face_2d = np.array([lmks[i] for i in ADJ_MODEL_INDICES], dtype=np.float32)
-
-        _, self.head_rotation, self.head_translation = cv2.solvePnP(
-            MODEL_POINTS,
-            lmks,
-            self.camera_matrix,
-            self.dist_co,
-            rvec=self.head_rotation,
-            tvec=self.head_translation,
-            useExtrinsicGuess=True,
-            flags=cv2.SOLVEPNP_SQPNP,
+        plane = (
+            np.array(norm_lmks[21]),
+            np.array(norm_lmks[251]),
+            lerp(np.array(norm_lmks[397]), np.array(norm_lmks[172]), 0.5),
         )
 
-        rot_mat = cv2.Rodrigues(self.head_rotation)[0]
-        pose_mat = cv2.hconcat((rot_mat, self.head_translation))
-        euler = cv2.decomposeProjectionMatrix(pose_mat)[-1]
+        qb = plane[1] - plane[0]
+        qc = plane[2] - plane[0]
+        n = np.cross(qb, qc)
 
-        if euler[0] < 0:
-            euler[0] += 360
-        euler[1] *= -1
-        euler[2] *= -1
+        unit_z = n / np.linalg.norm(n)
+        unit_x = qb / np.linalg.norm(qb)
+        unit_y = np.cross(unit_z, unit_x)
+
+        beta = np.arcsin(unit_z[0])
+        alpha = np.arctan2(-unit_z[1], -unit_z[2])
+        gamma = np.arctan2(-unit_y[0], unit_x[0])
+
+        euler = np.array([norm_angle(alpha), norm_angle(-beta), norm_angle(gamma)])
+        euler *= 180
+
+        euler[0] += 180
+        if euler[0] > 180:
+            euler[0] -= 360
 
         return frame, euler, self.head_translation
 

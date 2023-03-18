@@ -9,15 +9,18 @@ class FaceMeshDetector:
             max_num_faces=1,
             refine_landmarks=True,
             min_detection_confidence=min_detection,
-            min_tracking_confidence=min_tracking
+            min_tracking_confidence=min_tracking,
         )
 
         if debug > 0:
-            self.drawing_spec = mp.solutions.drawing_utils.DrawingSpec(thickness=1, circle_radius=1)
+            self.drawing_spec = mp.solutions.drawing_utils.DrawingSpec(
+                thickness=1, circle_radius=1
+            )
 
         self.debug = debug
 
     def run(self, frame):
+        frame.flags.writeable = False
         res = self.mp_face_mesh.process(frame)
 
         if res.multi_face_landmarks is not None:
@@ -26,8 +29,8 @@ class FaceMeshDetector:
                     image=frame,
                     landmark_list=res.multi_face_landmarks[0],
                     connections=mp.solutions.face_mesh.FACEMESH_CONTOURS,
-                    landmark_drawing_spec = self.drawing_spec,
-                    connection_drawing_spec = self.drawing_spec,
+                    landmark_drawing_spec=self.drawing_spec,
+                    connection_drawing_spec=self.drawing_spec,
                 )
 
             lmks = []
@@ -40,6 +43,10 @@ class FaceMeshDetector:
                 # add all points
                 norm_lmks.append((lmk.x, lmk.y, lmk.z))
 
-            return frame, np.array(lmks, dtype=np.float32), np.array(norm_lmks, dtype=np.float32)
+            return (
+                frame,
+                np.array(lmks, dtype=np.float32),
+                np.array(norm_lmks, dtype=np.float32),
+            )
         else:
             return frame, None, None
